@@ -39,9 +39,9 @@ st.markdown(
     }
 
     .block-container {
-        padding-top: 1.2rem;
+        padding-top: 4.8rem;
         padding-bottom: 2rem;
-        max-width: 1320px;
+        max-width: 1240px;
     }
 
     [data-testid="stSidebar"] {
