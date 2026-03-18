@@ -1,0 +1,19 @@
+{
+  "model": "ANN",
+  "architecture": "[12,11]",
+  "solver": "lbfgs",
+  "blind_test_well": "NM-TEEN3",
+  "CC_train": 0.849,
+  "CC_test": 0.5975,
+  "RMSE_train": 1.0163,
+  "RMSE_test": 4.4068,
+  "features": [
+    "WOB",
+    "RPM",
+    "Torque",
+    "SPP",
+    "Flow in",
+    "M.Temp in",
+    "M.Wt in"
+  ]
+}
