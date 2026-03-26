@@ -1,3 +1,4 @@
+
 import io
 import json
 import re
@@ -219,49 +220,52 @@ DEFAULT_DEPTH_COL = "Measured Depth (m)"
 DEFAULT_TARGET_COL = "ROP"
 
 DISPLAY_LABELS = {
-    "WOB": "WOB",
-    "RPM": "RPM",
-    "Torque": "Torque",
-    "SPP": "SPP",
-    "Flow in": "Flow in",
-    "M.Temp in": "M.Temp in",
-    "M.Wt in": "M.Wt in",
+    "WOB": "WOB (klb)",
+    "RPM": "RPM (rev/min)",
+    "Torque": "Torque (K.lb-ft)",
+    "SPP": "SPP (psi)",
+    "Flow in": "Flow in (GPM)",
+    "M.Temp in": "M.Temp in (C)",
+    "M.Wt in": "M.Wt in (ppg)",
     "Measured Depth (m)": "Measured Depth (m)",
-    "ROP": "ROP",
+    "ROP": "ROP (m/hr)",
+    "Well": "Well",
 }
 
 SYNONYMS = {
     "WOB": [
-        "wob", "weight on bit", "weight_on_bit", "weight-on-bit",
+        "wob", "wob (klb)", "weight on bit", "weight on bit (klb)", "weight_on_bit", "weight-on-bit",
         "bit weight", "bit load", "hook load on bit"
     ],
     "RPM": [
-        "rpm", "rotary rpm", "rotation rpm", "rotary speed", "bit rpm", "revolutions per minute"
+        "rpm", "rpm (rev/min)", "rotary rpm", "rotation rpm", "rotary speed", "bit rpm",
+        "revolutions per minute", "rev/min", "rev per min"
     ],
     "Torque": [
-        "torque", "rotary torque", "surface torque", "bit torque"
+        "torque", "torque (k.lb-ft)", "torque (klb-ft)", "rotary torque", "surface torque", "bit torque"
     ],
     "SPP": [
-        "spp", "stand pipe pressure", "standpipe pressure", "stand_pipe_pressure",
+        "spp", "spp (psi)", "stand pipe pressure", "standpipe pressure", "stand_pipe_pressure",
         "standpipe_press", "surface pump pressure"
     ],
     "Flow in": [
-        "flow in", "flow_in", "flow-in", "inlet flow", "input flow", "pump flow", "flow rate in", "flowrate in"
+        "flow in", "flow in (gpm)", "flow_in", "flow-in", "inlet flow", "input flow",
+        "pump flow", "flow rate in", "flowrate in", "gpm"
     ],
     "M.Temp in": [
-        "m temp in", "m.temp in", "m_temp_in", "motor temp in", "motor temperature in",
-        "motor inlet temp", "motor input temperature", "temperature in", "temp in"
+        "m temp in", "m.temp in", "m.temp in (c)", "m_temp_in", "motor temp in", "motor temperature in",
+        "motor inlet temp", "motor input temperature", "temperature in", "temp in", "temperature c"
     ],
     "M.Wt in": [
-        "m wt in", "m.wt in", "m_wt_in", "mud weight in",
-        "mud wt in", "mudweight in", "inlet mud weight"
+        "m wt in", "m.wt in", "m.wt in (ppg)", "m_wt_in", "mud weight in",
+        "mud wt in", "mudweight in", "inlet mud weight", "ppg"
     ],
     "Measured Depth (m)": [
-        "measured depth", "measured_depth", "measured-depth", "depth", "depth m",
+        "measured depth", "measured depth (m)", "measured_depth", "measured-depth", "depth", "depth m",
         "depth_m", "md", "md m", "measured depth m", "measureddepthm"
     ],
     "ROP": [
-        "rop", "actual rop", "rop actual", "rop_actual", "actual_rop", "actual-rop",
+        "rop", "rop (m/hr)", "actual rop", "rop actual", "rop_actual", "actual_rop", "actual-rop",
         "rate of penetration", "rate_of_penetration", "actual rate of penetration"
     ],
     "Well": [
@@ -339,11 +343,14 @@ def to_excel_bytes(df: pd.DataFrame, sheet_name: str = "Predictions"):
 
 
 def make_sample_bulk_template(features):
-    return pd.DataFrame(columns=features)
+    return pd.DataFrame(columns=[DISPLAY_LABELS.get(col, col) for col in features])
 
 
 def make_sample_depth_template(features):
-    cols = [DEFAULT_DEPTH_COL, "Well"] + features + [DEFAULT_TARGET_COL]
+    cols = [
+        DISPLAY_LABELS.get(DEFAULT_DEPTH_COL, DEFAULT_DEPTH_COL),
+        DISPLAY_LABELS.get("Well", "Well"),
+    ] + [DISPLAY_LABELS.get(col, col) for col in features] + [DISPLAY_LABELS.get(DEFAULT_TARGET_COL, DEFAULT_TARGET_COL)]
     return pd.DataFrame(columns=cols)
 
 
@@ -418,8 +425,8 @@ def plot_depth_profile(df_plot, depth_col, pred_col, actual_col=None, well_col=N
         template="plotly_dark",
         height=750,
         title="ROP vs Measured Depth",
-        xaxis_title="ROP (m/hr)",
-        yaxis_title=depth_col,
+        xaxis_title=DISPLAY_LABELS.get("ROP", "ROP"),
+        yaxis_title=DISPLAY_LABELS.get(depth_col, depth_col),
         yaxis=dict(autorange="reversed"),
         margin=dict(l=30, r=20, t=60, b=30),
         legend=dict(orientation="h", y=1.05, x=0),
@@ -434,6 +441,7 @@ def normalize_name(name):
     s = s.replace(".", " ")
     s = s.replace("-", " ")
     s = s.replace("_", " ")
+    s = s.replace("/", " ")
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
@@ -441,7 +449,7 @@ def normalize_name(name):
 def build_synonym_lookup():
     lookup = {}
     for canonical, variants in SYNONYMS.items():
-        all_variants = set(variants + [canonical])
+        all_variants = set(variants + [canonical, DISPLAY_LABELS.get(canonical, canonical)])
         for v in all_variants:
             lookup[normalize_name(v)] = canonical
     return lookup
@@ -581,6 +589,26 @@ def find_well_column(df):
     return None
 
 
+def rename_for_display(df: pd.DataFrame):
+    return df.rename(columns={col: DISPLAY_LABELS.get(col, col) for col in df.columns})
+
+
+def rename_from_display(df: pd.DataFrame):
+    reverse_map = {DISPLAY_LABELS.get(col, col): col for col in DISPLAY_LABELS.keys()}
+    new_cols = [reverse_map.get(col, col) for col in df.columns]
+    df = df.copy()
+    df.columns = new_cols
+    return df
+
+
+def coerce_numeric_columns(df: pd.DataFrame, cols):
+    df = df.copy()
+    for col in cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+
 # ============================================================
 # LOAD MODEL
 # ============================================================
@@ -647,7 +675,7 @@ def render_home():
             <div class="card-box">
                 <div>
                     <div class="card-title">Bulk Upload</div>
-                    <div class="card-text">Predict many rows and export enriched results.</div>
+                    <div class="card-text">Predict many rows, edit uploaded values, and export enriched results.</div>
                 </div>
             </div>
             """,
@@ -662,7 +690,7 @@ def render_home():
             <div class="card-box">
                 <div>
                     <div class="card-title">Depth Profile</div>
-                    <div class="card-text">Plot predicted vs actual ROP across measured depth.</div>
+                    <div class="card-text">Plot predicted vs actual ROP across measured depth with optional custom depth limits.</div>
                 </div>
             </div>
             """,
@@ -711,14 +739,14 @@ def render_single_entry():
             df_input = pd.DataFrame([inputs], columns=features)
             pred = predict_rop(df_input, model, scaler_x, scaler_y)[0]
 
-            record = df_input.copy()
-            record["Predicted ROP (m/hr)"] = pred
+            record = rename_for_display(df_input.copy())
+            record[DISPLAY_LABELS["ROP"]] = pred
             st.session_state.single_history.append(record.iloc[0].to_dict())
 
             st.markdown(
                 f"""
                 <div class="result-card">
-                    <div class="result-label">Predicted ROP (m/hr)</div>
+                    <div class="result-label">{DISPLAY_LABELS["ROP"]}</div>
                     <div class="result-value">{pred:.4f}</div>
                 </div>
                 """,
@@ -761,7 +789,7 @@ def render_bulk_upload():
         """
         <div class="section-box">
             <div class="section-title">Bulk Upload</div>
-            <div class="section-sub">Upload CSV or Excel, predict all rows, and download enriched results.</div>
+            <div class="section-sub">Upload CSV or Excel, manually edit rows if needed, predict all rows, and download enriched results.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -790,7 +818,7 @@ def render_bulk_upload():
         )
 
         st.markdown(
-            "<div class='small-note'>Flexible names supported. Example: weight on bit → WOB, motor temperature in → M.Temp in.</div>",
+            "<div class='small-note'>Updated units in all templates: WOB (klb), SPP (psi), M.Wt in (ppg), RPM (rev/min), Flow in (GPM), Torque (K.lb-ft), M.Temp in (C).</div>",
             unsafe_allow_html=True,
         )
 
@@ -807,7 +835,7 @@ def render_bulk_upload():
             df_before, df = standardize_uploaded_columns(df_raw)
 
             st.markdown("### Uploaded Data Preview")
-            st.dataframe(df_raw.head(20), use_container_width=True)
+            st.dataframe(rename_for_display(df_raw.head(20)), use_container_width=True)
 
             show_column_mapping(df_before, df)
 
@@ -816,27 +844,39 @@ def render_bulk_upload():
                 st.error("The system could not identify these required columns after intelligent mapping: " + ", ".join(missing_cols))
                 st.stop()
 
-            has_missing = show_missing_values_message(df, features, section_name="bulk file")
+            st.markdown("### Edit uploaded data before prediction")
+            editable_bulk = rename_for_display(df.copy())
+            editable_bulk = st.data_editor(
+                editable_bulk,
+                use_container_width=True,
+                num_rows="dynamic",
+                key="bulk_data_editor",
+            )
+            edited_df = rename_from_display(pd.DataFrame(editable_bulk))
+            edited_df = coerce_numeric_columns(edited_df, features)
+
+            has_missing = show_missing_values_message(edited_df, features, section_name="bulk file")
             if has_missing:
                 st.stop()
 
-            pred = predict_rop(df[features], model, scaler_x, scaler_y)
-            result_df = df.copy()
+            pred = predict_rop(edited_df[features], model, scaler_x, scaler_y)
+            result_df = edited_df.copy()
             result_df["Predicted ROP"] = pred
+            display_result_df = rename_for_display(result_df)
 
             st.markdown("### Prediction Results")
-            st.dataframe(result_df.head(50), use_container_width=True)
+            st.dataframe(display_result_df.head(50), use_container_width=True)
 
             st.download_button(
                 "Download Predicted Excel",
-                data=to_excel_bytes(result_df, sheet_name="Bulk_Predictions"),
+                data=to_excel_bytes(display_result_df, sheet_name="Bulk_Predictions"),
                 file_name="bulk_predictions.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
             st.download_button(
                 "Download Predicted CSV",
-                data=result_df.to_csv(index=False).encode("utf-8"),
+                data=display_result_df.to_csv(index=False).encode("utf-8"),
                 file_name="bulk_predictions.csv",
                 mime="text/csv",
             )
@@ -855,7 +895,7 @@ def render_depth_profile():
         """
         <div class="section-box">
             <div class="section-title">Depth Profile</div>
-            <div class="section-sub">Upload a depth-wise file to generate predicted ROP along measured depth and compare against actual ROP when available.</div>
+            <div class="section-sub">Upload a depth-wise file, edit values if needed, then generate predicted ROP along measured depth and compare against actual ROP when available.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -884,7 +924,7 @@ def render_depth_profile():
         )
 
         st.markdown(
-            "<div class='small-note'>Flexible names supported for depth, well, and actual ROP. Example: depth_m → Measured Depth (m), actual rop → ROP, well_name → Well.</div>",
+            "<div class='small-note'>Flexible names supported for depth, well, and actual ROP. Depth filters are optional now; you can type any start and end depth you want.</div>",
             unsafe_allow_html=True,
         )
 
@@ -901,7 +941,7 @@ def render_depth_profile():
             df_before, df = standardize_uploaded_columns(df_raw)
 
             st.markdown("### Uploaded Data Preview")
-            st.dataframe(df_raw.head(20), use_container_width=True)
+            st.dataframe(rename_for_display(df_raw.head(20)), use_container_width=True)
 
             show_column_mapping(df_before, df)
 
@@ -911,11 +951,21 @@ def render_depth_profile():
                 st.error("The system could not identify these required columns after intelligent mapping: " + ", ".join(missing_cols))
                 st.stop()
 
-            has_missing = show_missing_values_message(df, required, section_name="depth profile file")
+            st.markdown("### Edit uploaded depth data before plotting")
+            editable_depth = rename_for_display(df.copy())
+            editable_depth = st.data_editor(
+                editable_depth,
+                use_container_width=True,
+                num_rows="dynamic",
+                key="depth_data_editor",
+            )
+            df_plot = rename_from_display(pd.DataFrame(editable_depth))
+            df_plot = coerce_numeric_columns(df_plot, required + ([DEFAULT_TARGET_COL] if DEFAULT_TARGET_COL in df_plot.columns else []))
+
+            has_missing = show_missing_values_message(df_plot, required, section_name="depth profile file")
             if has_missing:
                 st.stop()
 
-            df_plot = df.copy()
             df_plot["Predicted ROP"] = predict_rop(df_plot[features], model, scaler_x, scaler_y)
 
             well_col = "Well" if "Well" in df_plot.columns else find_well_column(df_plot)
@@ -936,24 +986,36 @@ def render_depth_profile():
             depth_max_data = float(df_plot[DEFAULT_DEPTH_COL].max())
 
             with f2:
+                use_custom_depth_from = st.checkbox("Use custom Depth From", value=False)
                 selected_depth_min = st.number_input(
                     "Depth From",
                     value=depth_min_data,
-                    min_value=depth_min_data,
-                    max_value=depth_max_data,
                     step=1.0,
-                    format="%g"
+                    format="%g",
+                    key="depth_from_input",
+                    help="You can type any value. It is no longer restricted to the uploaded file minimum."
                 )
 
             with f3:
+                use_custom_depth_to = st.checkbox("Use custom Depth To", value=False)
                 selected_depth_max = st.number_input(
                     "Depth To",
                     value=depth_max_data,
-                    min_value=depth_min_data,
-                    max_value=depth_max_data,
                     step=1.0,
-                    format="%g"
+                    format="%g",
+                    key="depth_to_input",
+                    help="You can type any value. It is no longer restricted to the uploaded file maximum."
                 )
+
+            if not use_custom_depth_from:
+                selected_depth_min = depth_min_data
+            if not use_custom_depth_to:
+                selected_depth_max = depth_max_data
+
+            st.caption(
+                f"Uploaded depth range: {depth_min_data:g} to {depth_max_data:g} m. "
+                f"Applied plot range: {selected_depth_min:g} to {selected_depth_max:g} m."
+            )
 
             if selected_depth_min > selected_depth_max:
                 st.warning("Depth From is greater than Depth To. Please correct the interval.")
@@ -981,7 +1043,7 @@ def render_depth_profile():
                 st.stop()
 
             st.markdown("### Depth Profile Data Preview")
-            st.dataframe(filtered_df.head(100), use_container_width=True)
+            st.dataframe(rename_for_display(filtered_df.head(100)), use_container_width=True)
 
             actual_col = DEFAULT_TARGET_COL if DEFAULT_TARGET_COL in filtered_df.columns else None
 
@@ -994,16 +1056,18 @@ def render_depth_profile():
             )
             st.plotly_chart(fig, use_container_width=True)
 
+            display_filtered_df = rename_for_display(filtered_df)
+
             st.download_button(
                 "Download Depth Profile Results",
-                data=to_excel_bytes(filtered_df, sheet_name="Depth_Profile"),
+                data=to_excel_bytes(display_filtered_df, sheet_name="Depth_Profile"),
                 file_name="depth_profile_predictions.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
             st.download_button(
                 "Download Plot Data as CSV",
-                data=filtered_df.to_csv(index=False),
+                data=display_filtered_df.to_csv(index=False).encode("utf-8"),
                 file_name="depth_profile_predictions.csv",
                 mime="text/csv",
             )
